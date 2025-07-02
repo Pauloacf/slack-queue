@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: slack-queue
+    env: go
+    repo: https://github.com/Pauloacf/slack-queue
+    buildCommand: go build -o slack-queue ./cmd/slack-queue
+    startCommand: ./slack-queue -p ":1000" -cmdUrl "/slash" -actionUrl "/action"
+    envVars:
+      - key: SLACK_SIGNING_SECRET
+      - key: SLACK_BOT_TOKEN
+      - key: PERSISTENCE
+        value: "false"
+    plan: free
