@@ -58,6 +58,59 @@ type ServerGroupState struct {
 }
 
 func (s *Server) ForwardCommand(cmd *slack.SlashCommand, w http.ResponseWriter) {
+	// Detecta comando "add <@UXXXX>"
+	if strings.HasPrefix(cmd.Text, "add ") {
+		targetMention := strings.TrimSpace(strings.TrimPrefix(cmd.Text, "add "))
+		userID := extractUserID(targetMention)
+		if userID == "" {
+			msg := "Formato inválido. Use: `/queue add @usuario`"
+			s.api.PostMessage(cmd.ChannelID,
+				slack.MsgOptionText(msg, false),
+				slack.MsgOptionPostEphemeral(cmd.UserID))
+			return
+		}
+
+		err := s.service.Put(userID)
+		if err != nil {
+			msg := fmt.Sprintf("Erro ao adicionar <@%s> à fila: %v", userID, err)
+			s.api.PostMessage(cmd.ChannelID,
+				slack.MsgOptionText(msg, false),
+				slack.MsgOptionPostEphemeral(cmd.UserID))
+		} else {
+			msg := fmt.Sprintf("<@%s> foi adicionado à fila por <@%s>.", userID, cmd.UserID)
+			s.api.PostMessage(cmd.ChannelID,
+				slack.MsgOptionText(msg, false))
+		}
+		return
+	}
+
+	// Detecta comando "remove <@UXXXX>"
+	if strings.HasPrefix(cmd.Text, "remove ") {
+		targetMention := strings.TrimSpace(strings.TrimPrefix(cmd.Text, "remove "))
+		userID := extractUserID(targetMention)
+		if userID == "" {
+			msg := "Formato inválido. Use: `/queue remove @usuario`"
+			s.api.PostMessage(cmd.ChannelID,
+				slack.MsgOptionText(msg, false),
+				slack.MsgOptionPostEphemeral(cmd.UserID))
+			return
+		}
+
+		err := s.service.Remove(userID)
+		if err != nil {
+			msg := fmt.Sprintf("Erro ao remover <@%s> da fila: %v", userID, err)
+			s.api.PostMessage(cmd.ChannelID,
+				slack.MsgOptionText(msg, false),
+				slack.MsgOptionPostEphemeral(cmd.UserID))
+		} else {
+			msg := fmt.Sprintf("<@%s> foi removido da fila por <@%s>.", userID, cmd.UserID)
+			s.api.PostMessage(cmd.ChannelID,
+				slack.MsgOptionText(msg, false))
+		}
+		return
+	}
+
+	// Comportamento original
 	c, ok := s.commands[cmd.Command]
 	if !ok {
 		w.WriteHeader(http.StatusNotFound)
@@ -66,6 +119,14 @@ func (s *Server) ForwardCommand(cmd *slack.SlashCommand, w http.ResponseWriter) 
 
 	c.Handle(cmd, s.service, w)
 }
+
+func extractUserID(mention string) string {
+	if strings.HasPrefix(mention, "<@") && strings.HasSuffix(mention, ">") {
+		return strings.TrimSuffix(strings.TrimPrefix(mention, "<@"), ">")
+	}
+	return ""
+}
+
 
 func (s *Server) ForwardAction(act *slack.InteractionCallback, w http.ResponseWriter) {
 	var handler service.Action
